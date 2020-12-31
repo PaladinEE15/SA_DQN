@@ -35,3 +35,9 @@ def load_config(args):
         config["path_prefix"] = args.path_prefix
     return config
 
+def load_config_direct(config_path):
+    with open("defaults.json") as f:
+        config = json.load(f)    
+    with open(config_path) as f:
+        update_dict(config, json.load(f))
+    return config
