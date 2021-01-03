@@ -79,6 +79,15 @@ def logits_margin(logits, y):
     return margin
 
 
+def generate_rpb(model, total_steps, env, save_path):
+    
+
+
+def robust_learn(target_model, total_steps, train_attack_mag, attack_steps, learning_rate, buffer_name, batch_size=32, robust_factor=1):
+
+
+
+
 def compute_td_loss(current_model, target_model, batch_size, replay_buffer, per, use_cpp_buffer, use_async_rb, optimizer, gamma, memory_mgr, robust, **kwargs):
     t = time.time()
     dtype = kwargs['dtype']
