@@ -46,7 +46,7 @@ def generate_stb(model, env, save_path, bf_size=100000):
     save_to_pkl(save_path, state_buffer)
     return state_buffer
 
-def robust_learn(env_id, rob_model, total_steps, train_attack_mag, attack_steps, lr, stb_path, src_path, tgt_path, exist_stb=False, log_name=None, batch_size=32, robust_factor=1):
+def robust_learn(env_id, total_steps, train_attack_mag, lr, stb_path, src_path, tgt_path, exist_stb=False, log_name=None, batch_size=32, robust_factor=1):
     env_name = env_name_set[env_id]
     env_params = env_params_set[env_id]
     if "NoFrameskip" not in env_name:

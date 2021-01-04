@@ -9,6 +9,7 @@ import os
 import pathlib
 import pickle
 from typing import Any, Dict, Optional, Tuple, Union
+import functools
 
 class StateBuffer(object):
 
@@ -49,17 +50,20 @@ class StateBuffer(object):
         self.full = False    
 
 
-def open_path(path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verbose: int = 0, suffix: Optional[str] = None):
+@functools.singledispatch
+def open_path(path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verbose=0, suffix=None):
     """
     Opens a path for reading or writing with a preferred suffix and raises debug information.
     If the provided path is a derivative of io.BufferedIOBase it ensures that the file
     matches the provided mode, i.e. If the mode is read ("r", "read") it checks that the path is readable.
     If the mode is write ("w", "write") it checks that the file is writable.
+
     If the provided path is a string or a pathlib.Path, it ensures that it exists. If the mode is "read"
     it checks that it exists, if it doesn't exist it attempts to read path.suffix if a suffix is provided.
     If the mode is "write" and the path does not exist, it creates all the parent folders. If the path
     points to a folder, it changes the path to path_2. If the path already exists and verbose == 2,
     it raises a warning.
+
     :param path: the path to open.
         if save_path is a str or pathlib.Path and mode is "w", single dispatch ensures that the
         path actually exists. If path is a io.BufferedIOBase the path exists.
@@ -68,7 +72,6 @@ def open_path(path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verb
     :param suffix: The preferred suffix. If mode is "w" then the opened file has the suffix.
         If mode is "r" then we attempt to open the path. If an error is raised and the suffix
         is not None, we attempt to open the path with the suffix.
-    :return:
     """
     if not isinstance(path, io.BufferedIOBase):
         raise TypeError("Path parameter has invalid type.", io.BufferedIOBase)
@@ -83,6 +86,74 @@ def open_path(path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verb
         e1 = "writable" if "w" == mode else "readable"
         raise ValueError(f"Expected a {e1} file.")
     return path
+
+
+@open_path.register(str)
+def open_path_str(path: str, mode: str, verbose=0, suffix=None) -> io.BufferedIOBase:
+    """
+    Open a path given by a string. If writing to the path, the function ensures
+    that the path exists.
+
+    :param path: the path to open. If mode is "w" then it ensures that the path exists
+        by creating the necessary folders and renaming path if it points to a folder.
+    :param mode: how to open the file. "w" for writing, "r" for reading.
+    :param verbose: Verbosity level, 0 means only warnings, 2 means debug information.
+    :param suffix: The preferred suffix. If mode is "w" then the opened file has the suffix.
+        If mode is "r" then we attempt to open the path. If an error is raised and the suffix
+        is not None, we attempt to open the path with the suffix.
+    """
+    return open_path(pathlib.Path(path), mode, verbose, suffix)
+
+
+@open_path.register(pathlib.Path)
+def open_path_pathlib(path: pathlib.Path, mode: str, verbose=0, suffix=None) -> io.BufferedIOBase:
+    """
+    Open a path given by a string. If writing to the path, the function ensures
+    that the path exists.
+
+    :param path: the path to check. If mode is "w" then it
+        ensures that the path exists by creating the necessary folders and
+        renaming path if it points to a folder.
+    :param mode: how to open the file. "w" for writing, "r" for reading.
+    :param verbose: Verbosity level, 0 means only warnings, 2 means debug information.
+    :param suffix: The preferred suffix. If mode is "w" then the opened file has the suffix.
+        If mode is "r" then we attempt to open the path. If an error is raised and the suffix
+        is not None, we attempt to open the path with the suffix.
+    """
+    if mode not in ("w", "r"):
+        raise ValueError("Expected mode to be either 'w' or 'r'.")
+
+    if mode == "r":
+        try:
+            path = path.open("rb")
+        except FileNotFoundError as error:
+            if suffix is not None and suffix != "":
+                newpath = pathlib.Path(f"{path}.{suffix}")
+                if verbose == 2:
+                    warnings.warn(f"Path '{path}' not found. Attempting {newpath}.")
+                path, suffix = newpath, None
+            else:
+                raise error
+    else:
+        try:
+            if path.suffix == "" and suffix is not None and suffix != "":
+                path = pathlib.Path(f"{path}.{suffix}")
+            if path.exists() and path.is_file() and verbose == 2:
+                warnings.warn(f"Path '{path}' exists, will overwrite it.")
+            path = path.open("wb")
+        except IsADirectoryError:
+            warnings.warn(f"Path '{path}' is a folder. Will save instead to {path}_2")
+            path = pathlib.Path(f"{path}_2")
+        except FileNotFoundError:  # Occurs when the parent folder doesn't exist
+            warnings.warn(f"Path '{path.parent}' does not exist. Will create it.")
+            path.parent.mkdir(exist_ok=True, parents=True)
+
+    # if opening was successful uses the identity function
+    # if opening failed with IsADirectory|FileNotFound, calls open_path_pathlib
+    #   with corrections
+    # if reading failed with FileNotFoundError, calls open_path_pathlib with suffix
+
+    return open_path(path, mode, verbose, suffix)
 
 def load_from_pkl(path: Union[str, pathlib.Path, io.BufferedIOBase], verbose: int = 0) -> Any:
     """

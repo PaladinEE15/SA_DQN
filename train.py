@@ -3,7 +3,6 @@ sys.path.append("./common")
 sys.path.append("./auto_LiRPA")
 from auto_LiRPA import BoundedModule, BoundedTensor
 from auto_LiRPA.perturbations import PerturbationLpNorm
-from statebuffer import StateBuffer, save_to_pkl, load_from_pkl
 from argparser import argparser
 from eps_scheduler import EpsilonScheduler
 from read_config import load_config
@@ -15,13 +14,11 @@ import random
 from common.wrappers import make_atari, wrap_deepmind, wrap_pytorch, make_atari_cart
 from models import QNetwork, model_setup
 import torch.optim as optim
-from torch.nn import functional as F
 import torch
 from torch.nn import CrossEntropyLoss
 import torch.autograd as autograd
 import math
 import time
-import copy
 import os
 import argparse
 from datetime import datetime
@@ -80,6 +77,7 @@ def logits_margin(logits, y):
     margin = sec_logits - torch.gather(logits, 1, torch.unsqueeze(y, 1)).squeeze(1)
     margin = margin.sum()
     return margin
+
 
 def compute_td_loss(current_model, target_model, batch_size, replay_buffer, per, use_cpp_buffer, use_async_rb, optimizer, gamma, memory_mgr, robust, **kwargs):
     t = time.time()
