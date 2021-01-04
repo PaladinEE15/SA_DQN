@@ -3,6 +3,7 @@ sys.path.append("./common")
 sys.path.append("./auto_LiRPA")
 from auto_LiRPA import BoundedModule, BoundedTensor
 from auto_LiRPA.perturbations import PerturbationLpNorm
+from statebuffer import StateBuffer, save_to_pkl, load_from_pkl
 from argparser import argparser
 from eps_scheduler import EpsilonScheduler
 from read_config import load_config
@@ -78,13 +79,38 @@ def logits_margin(logits, y):
     margin = margin.sum()
     return margin
 
+env_params_set=[{"frame_stack": false, "color_image": false, "central_crop": true,"restrict_actions": true},{"frame_stack": false, "color_image": false, "central_crop": true,"crop_shift": 0},{"frame_stack": false, "color_image": false, "central_crop": true,"crop_shift": 10, "restrict_actions": 4},{"frame_stack": false, "color_image": false, "central_crop": true, "crop_shift": 20, "restrict_actions": true}]
+env_name_set = ["BankHeistNoFrameskip-v4","FreewayNoFrameskip-v4","PongNoFrameskip-v4","RoadRunnerNoFrameskip-v4"]
 
-def generate_rpb(model, total_steps, env, save_path):
+def generate_stb(model, env, save_path, bf_size=100000):
+    state = env.reset()
+    state_buffer = StateBuffer(d_type=state.dtype,obs_shape=state.shape,buffer_size=bf_size)
+    for steps in bf_size:
+        state_tensor = torch.from_numpy(np.ascontiguousarray(state)).unsqueeze(0).cuda().to(torch.float32)
+        state_tensor /= 255
+        action = model.act(state_tensor)
+        state, reward, done, _ = env.step(action)
+        state_buffer.add(state)
+        if done:
+            state = env.reset()
+    save_to_pkl(save_path, state_buffer)
+    return state_buffer
+
+def robust_learn(env_id, target_model, total_steps, train_attack_mag, attack_steps, learning_rate, stb_path, exist_stb=False, batch_size=32, robust_factor=1):
+    env_name = env_name_set[env_id]
+    env_params = env_params_set[env_id]
+    if "NoFrameskip" not in env_name:
+        env = make_atari_cart(env_name)
+    else:
+        env = make_atari(env_name)
+        env = wrap_deepmind(env, **env_params)
+        env = wrap_pytorch(env)    
+
+    if exist_stb:
+        state_buffer = load_from_pkl(stb_path)
+    else:
+        state_buffer = generate_stb(target_model, env, stb_path)
     
-
-
-def robust_learn(target_model, total_steps, train_attack_mag, attack_steps, learning_rate, buffer_name, batch_size=32, robust_factor=1):
-
 
 
 
