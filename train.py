@@ -15,11 +15,13 @@ import random
 from common.wrappers import make_atari, wrap_deepmind, wrap_pytorch, make_atari_cart
 from models import QNetwork, model_setup
 import torch.optim as optim
+from torch.nn import functional as F
 import torch
 from torch.nn import CrossEntropyLoss
 import torch.autograd as autograd
 import math
 import time
+import copy
 import os
 import argparse
 from datetime import datetime
@@ -78,41 +80,6 @@ def logits_margin(logits, y):
     margin = sec_logits - torch.gather(logits, 1, torch.unsqueeze(y, 1)).squeeze(1)
     margin = margin.sum()
     return margin
-
-env_params_set=[{"frame_stack": false, "color_image": false, "central_crop": true,"restrict_actions": true},{"frame_stack": false, "color_image": false, "central_crop": true,"crop_shift": 0},{"frame_stack": false, "color_image": false, "central_crop": true,"crop_shift": 10, "restrict_actions": 4},{"frame_stack": false, "color_image": false, "central_crop": true, "crop_shift": 20, "restrict_actions": true}]
-env_name_set = ["BankHeistNoFrameskip-v4","FreewayNoFrameskip-v4","PongNoFrameskip-v4","RoadRunnerNoFrameskip-v4"]
-
-def generate_stb(model, env, save_path, bf_size=100000):
-    state = env.reset()
-    state_buffer = StateBuffer(d_type=state.dtype,obs_shape=state.shape,buffer_size=bf_size)
-    for steps in bf_size:
-        state_tensor = torch.from_numpy(np.ascontiguousarray(state)).unsqueeze(0).cuda().to(torch.float32)
-        state_tensor /= 255
-        action = model.act(state_tensor)
-        state, reward, done, _ = env.step(action)
-        state_buffer.add(state)
-        if done:
-            state = env.reset()
-    save_to_pkl(save_path, state_buffer)
-    return state_buffer
-
-def robust_learn(env_id, target_model, total_steps, train_attack_mag, attack_steps, learning_rate, stb_path, exist_stb=False, batch_size=32, robust_factor=1):
-    env_name = env_name_set[env_id]
-    env_params = env_params_set[env_id]
-    if "NoFrameskip" not in env_name:
-        env = make_atari_cart(env_name)
-    else:
-        env = make_atari(env_name)
-        env = wrap_deepmind(env, **env_params)
-        env = wrap_pytorch(env)    
-
-    if exist_stb:
-        state_buffer = load_from_pkl(stb_path)
-    else:
-        state_buffer = generate_stb(target_model, env, stb_path)
-    
-
-
 
 def compute_td_loss(current_model, target_model, batch_size, replay_buffer, per, use_cpp_buffer, use_async_rb, optimizer, gamma, memory_mgr, robust, **kwargs):
     t = time.time()
