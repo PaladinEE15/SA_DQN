@@ -111,6 +111,40 @@ def cw(model, X, y, verbose=False, params={}):
         #    print('loss1: {}, loss2: {}'.format(loss1, loss2))
     return tanh_rescale(Xt_adv, img_min, img_max).data
 
+def myattack(model, X, atk_type, atk_sth=1/255, atk_steps=10):
+    img_min = 0.0
+    img_max = 1.0
+    if atk_type == 0: #random attack
+        noise = 2 * atk_sth * torch.rand(X.data.size()).cuda() - atk_sth
+        return X+noise
+
+    raw_logits = Variable(torch.tensor(model.forward(X)))
+    y = torch.argmax(raw_logits,dim=1)
+    step_size = atk_sth * 1.0 / atk_steps
+    X_adv = Variable(X.data, requires_grad=True)
+    criter = nn.CrossEntropyLoss()
+    if atk_type == 2:
+        wort_y = torch.argmin(raw_logits,dim=1)
+    
+    for i in range(atk_steps):
+        logits = model.forward(X_adv)
+        if atk_type == 1: #cross-entropy
+            loss = criter(logits, y)
+        elif atk_type == 2: #maxwostQ
+            sfm_logits = nn.functional.softmax(logits)
+            loss = -sfm_logits[wort_y]
+        elif atk_type == 3: #minbestQ
+            sfm_logits = nn.functional.softmax(logits)
+            loss = sfm_logits[y]
+
+        model.features.zero_grad()
+        loss.backward()
+        eta = step_size * X_adv.grad.data.sign()
+        X_adv = Variable(X_adv.data + eta, requires_grad=True)
+        eta = torch.clamp(X_adv.data - X.data, -atk_sth, atk_sth)
+        X_adv.data = X.data + eta
+        X_adv.data = torch.clamp(X_adv.data, img_min, img_max)
+    return X_adv.data   
 
 def attack(model, X, attack_config, loss_func=nn.CrossEntropyLoss()):
     method = attack_config.get('method', 'pgd')
